@@ -1,0 +1,155 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// One of the ~25-30 scoring dimensions from PROJECT.md (climate, budget,
+// safety, ...). Kept as a table (not an enum) so dimensions can be added
+// without a migration once the questionnaire is finalized.
+model Dimension {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  category    String
+  createdAt   DateTime @default(now())
+
+  placeScores  PlaceScore[]
+  userAnswers  UserProfileScore[]
+}
+
+// A candidate location: country, city, or (later) neighborhood/village.
+model Place {
+  id          String   @id @default(cuid())
+  name        String
+  level       PlaceLevel
+  countryCode String
+  parentId    String?
+  parent      Place?   @relation("PlaceHierarchy", fields: [parentId], references: [id])
+  children    Place[]  @relation("PlaceHierarchy")
+  createdAt   DateTime @default(now())
+
+  scores      PlaceScore[]
+
+  @@index([countryCode])
+  @@index([parentId])
+}
+
+enum PlaceLevel {
+  COUNTRY
+  CITY
+  NEIGHBORHOOD
+}
+
+// A place's score (0-100) on one dimension.
+model PlaceScore {
+  id          String   @id @default(cuid())
+  placeId     String
+  dimensionId String
+  score       Float
+
+  place       Place     @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  dimension   Dimension @relation(fields: [dimensionId], references: [id], onDelete: Cascade)
+
+  @@unique([placeId, dimensionId])
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String?  @unique
+  createdAt   DateTime @default(now())
+
+  profiles    TestRun[]
+}
+
+// One completed (or in-progress) test attempt.
+model TestRun {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  matchPrecision Float @default(0) // 0-1, rises as more parts are completed
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+
+  // Deel 3 — budget-verdeelspel: % van fictief maandbudget per categorie.
+  budgetAllocation Json?
+
+  // Deel 7 — praktische situatie (maakt het verhuisplan realistisch).
+  nationality    String?
+  remoteWork     Boolean?
+  hasKids        Boolean?
+  movingBudget   MovingBudget?
+  languageLevel  LanguageLevel?
+
+  scores      UserProfileScore[]
+  dealBreakers DealBreaker[]
+  results     MatchResult[]
+}
+
+enum MovingBudget {
+  KRAP
+  GEMIDDELD
+  RUIM
+}
+
+enum LanguageLevel {
+  GEEN
+  BASIS
+  GEVORDERD
+  VLOEIEND
+}
+
+// The user's derived score + importance weight on one dimension, for one test run.
+model UserProfileScore {
+  id          String   @id @default(cuid())
+  testRunId   String
+  dimensionId String
+  score       Float
+  weight      Float    @default(1)
+
+  testRun     TestRun   @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  dimension   Dimension @relation(fields: [dimensionId], references: [id], onDelete: Cascade)
+
+  @@unique([testRunId, dimensionId])
+}
+
+// A hard filter from Part 4 (deal-breakers & must-haves).
+model DealBreaker {
+  id          String   @id @default(cuid())
+  testRunId   String
+  testRun     TestRun  @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  label       String
+  type        DealBreakerType
+
+  createdAt   DateTime @default(now())
+}
+
+enum DealBreakerType {
+  EXCLUDE
+  REQUIRE
+}
+
+// A computed match for one test run: Plan A / B / C or a top-10 entry.
+model MatchResult {
+  id          String   @id @default(cuid())
+  testRunId   String
+  testRun     TestRun  @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  placeId     String
+  matchPercent Float
+  planType    PlanType
+  rank        Int
+  createdAt   DateTime @default(now())
+}
+
+enum PlanType {
+  PLAN_A
+  PLAN_B
+  PLAN_C
+  TOP_10
+}

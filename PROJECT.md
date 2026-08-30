@@ -104,6 +104,21 @@ There's no ready-made "every village on Earth, scored on 25 dimensions" dataset.
 - **Phase 2 — The fun layer**: add Part 2 (image swipe) and Part 3 (budget game). AI-generated personal report. Freemium paywall live. Top-10 + Plan B & C.
 - **Phase 3 — The dream version**: expand to neighborhoods/villages region by region. All test parts (5, 6, 7). Affiliate partners integrated. Full relocation plan with visa/budget breakdown.
 
-## 8. Repo status
+Actual build order ended up split differently than the roadmap above (data → questionnaire → algorithm → results screen, rather than "Phase 1/2/3" as scoped here) — see §8 for what that produced. This section is kept as the original north star; §8 is the source of truth for current status.
 
-Scaffolded with `create-next-app` (TypeScript, App Router, Tailwind, `src/` dir, ESLint). No product code yet — next step is building the Phase 1 MVP: the 25-category questionnaire, hard-filter logic, a seed dataset (~50 countries / ~200 cities), and a basic match + Plan A output screen.
+## 8. Repo status (current)
+
+Scaffolded with `create-next-app` (TypeScript, App Router, Tailwind, `src/` dir, ESLint), Prisma 7 + `@prisma/adapter-pg` against a Neon Postgres database.
+
+**Built so far:**
+- **Dataset**: 25 dimensions (`docs/dimensions.md`, `prisma/seed-data/dimensions.ts`), **44 European countries + 73 cities** (117 places, not yet the ~50/~200 stated above — coverage is Europe-only so far, no other continents, no neighborhood-level places; see §6 and `docs/dimensions.md` for data-quality caveats, including the microstate residency-realism fix applied while tuning).
+- **All 7 test parts**: Part 1 (75 questions, `src/lib/questions.ts`), Part 2 image-swipe (`bonusQuestions` "Beeld & gevoel" — text/emoji scenario cards instead of real photos, no image library available), Part 3 budget-allocation game (`src/lib/budgetGame.ts`, `BudgetGameStep.tsx` — nudges dimension weights), Part 4 deal-breakers (`src/lib/dealBreakers.ts`, `DealBreakersStep.tsx`), Part 5 dilemmas and Part 6 "ideal day" (also folded into `bonusQuestions`), Part 7 practical constraints (`src/lib/practical.ts`, `PracticalStep.tsx` — nationality, remote work, kids, moving budget, language level; stored on `TestRun`). All wired into one flow at `/test` (`QuizFlow.tsx`) with a progress bar spanning all 92 scored questions.
+- **Algorithm layers 1–3** (`src/lib/match.ts`): profile scores+weights (Part 1 extremity + budget-game nudges) on submit (`src/app/test/actions.ts`), hard filters (deal-breakers incl. a real landlocked-country check, plus budget/visa cutoffs), weighted-distance match score. Plan B is filtered to be genuinely more affordable/visa-easier than Plan A; Plan C is guaranteed to be a different country than A and B.
+- **Layer 4 substitute**: no LLM is wired up (no AI API key configured in this project), so "why this place fits" and the full relocation plan are deterministic, data-driven Dutch text generators (`topReasons` in `match.ts`, `src/lib/relocationPlan.ts`) instead of AI-generated prose — a known, documented simplification of §3's layer 4.
+- **Full relocation plan for Plan A** (§4): visa/residency text, budget range, a month-by-month timeline, housing guidance, work guidance, practical steps, and an interactive (localStorage-persisted) checklist — all personalized from Part 7's answers and Plan A's scores.
+- **Results screen** (`/test/result/[id]/matches`): free top-3 teaser + Plan A with reasons, then a demo paywall gate (see below) unlocking Plan B/C, a filterable Top-10, the full relocation plan, and an affiliate-category placeholder list. Shareable via a copy-link button, a dynamic OG share image, and a "Download als PDF" button (browser print-to-PDF via print CSS).
+- **Monetization structure (UI only)**: `PaywallGate.tsx` implements the free/paid split from §5 (free: test + top-3 + Plan A teaser; paid: everything else) — but it is a local, client-side toggle with **no real payment provider wired up**, clearly labeled as a demo. Affiliate categories are shown as unlinked placeholders (no fabricated vendor URLs).
+
+**Not built / not achievable in this project as-is:**
+- **Global, village-level data.** The concept doc's core ambition — every country, city, *and village/neighborhood* on Earth — is a large real-world data-engineering effort (real cost-of-living/safety/climate/visa sources per PROJECT.md §6), not something crafted by hand at that scale. Current dataset stays Europe, country/city-level only.
+- **Real payments.** Wiring an actual paywall needs a payment processor (e.g. Stripe) and business/legal setup this project doesn't have; the freemium *structure* exists, the *transaction* doesn't.
